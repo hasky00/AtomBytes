@@ -1,0 +1,202 @@
+<title>Atombytes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;9..144,700&display=swap">
+<style>
+/* Layout: lab bench. Two capture slots side by side, a comparison strip, then the ledger record. Dark glass green from the bottle. */
+:root{
+  --bg:#f3f1ea; --fg:#1d2420; --mute:#6a7369; --line:#d8d4c6; --panel:#ffffff;
+  --accent:#4f6b52; --accent-fg:#ffffff; --ok:#3a7d4f; --bad:#b4552f;
+  --display:"Fraunces",Georgia,serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141a16; --fg:#e8e6dc; --mute:#9aa397; --line:#2b352e; --panel:#1c2420;
+  --accent:#8fb48f; --accent-fg:#101512; --ok:#7fc693; --bad:#e3925f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141a16; --fg:#e8e6dc; --mute:#9aa397; --line:#2b352e; --panel:#1c2420;
+  --accent:#8fb48f; --accent-fg:#101512; --ok:#7fc693; --bad:#e3925f; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--mono);font-size:14px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 40px}
+.wrap{max-width:880px;margin:0 auto;display:grid;gap:28px}
+h1{font-family:var(--display);font-weight:700;font-size:2.4rem;line-height:1.05;margin:0;text-wrap:balance}
+.sub{color:var(--mute);max-width:60ch;margin:6px 0 0}
+.pipeline{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.pipeline span{padding:4px 8px;border:1px solid var(--line);border-radius:999px}
+.pipeline span.on{border-color:var(--accent);color:var(--accent)}
+.slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.slot{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:12px;min-width:0}
+.slot h2{font-family:var(--display);font-weight:500;font-size:1.2rem;margin:0}
+.drop{border:1.5px dashed var(--line);border-radius:8px;min-height:150px;display:grid;place-items:center;text-align:center;color:var(--mute);padding:12px;cursor:pointer;position:relative;overflow:hidden}
+.drop:focus-within,.drop.over{border-color:var(--accent)}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.drop img{max-height:220px;max-width:100%;border-radius:4px}
+.cropbox{position:relative;display:inline-block;max-width:100%;touch-action:none;user-select:none}
+.cropbox canvas.src{max-width:100%;height:auto;display:block;border-radius:4px}
+.cropbox .sel{position:absolute;border:2px solid var(--accent);background:rgba(79,107,82,.15);pointer-events:none}
+.steps{display:flex;flex-wrap:wrap;gap:6px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.steps span{padding:2px 7px;border:1px solid var(--line);border-radius:999px}
+.steps span.on{border-color:var(--accent);color:var(--accent)}
+.thumbs{display:flex;gap:10px;align-items:flex-end}
+.thumbs canvas{image-rendering:pixelated;border:1px solid var(--line);background:#000}
+.thumbs small{display:block;color:var(--mute);font-size:11px;margin-top:4px}
+.kv{display:grid;gap:6px}
+.kv b{font-weight:500;color:var(--mute);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.kv code{display:block;word-break:break-all;font-size:12px;padding:8px;background:var(--bg);border-radius:6px;border:1px solid var(--line)}
+.cmp{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:8px}
+.cmp .big{font-family:var(--display);font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums}
+.cmp .big.ok{color:var(--ok)} .cmp .big.bad{color:var(--bad)}
+.ledger{display:grid;gap:10px}
+.ledger pre{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-x:auto;font-size:12px;line-height:1.45}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+button{font:inherit;background:var(--accent);color:var(--accent-fg);border:0;border-radius:6px;padding:8px 14px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+button.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+.note{color:var(--mute);font-size:12px;max-width:70ch}
+.toast{color:var(--ok);font-size:12px}
+footer{border-top:1px solid var(--line);padding-top:16px;color:var(--mute);font-size:12px}
+@media (prefers-reduced-motion:no-preference){.drop{transition:border-color .15s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Atombytes</h1>
+    <p class="sub">An adapter from atoms to bytes. Drop a photo of a physical object, get a stable fingerprint, hash it, and anchor the hash as a Nostr event. v0.2 lets you crop to the part of the object that counts.</p>
+  </header>
+
+  <section class="slots">
+    <div class="slot" id="slotA">
+      <h2>Object A</h2>
+      <div class="steps"><span data-s="1">1 Capture</span><span data-s="2">2 Crop</span><span data-s="3">3 Normalize</span><span data-s="4">4 Fingerprint</span><span data-s="5">5 Hash</span></div>
+      <label class="drop"><input type="file" id="fileA" accept="image/*"><span>Drop or tap to add a photo</span></label>
+      <div class="cropbox" hidden><canvas class="src"></canvas><div class="sel"></div></div>
+      <p class="note crophint" hidden>Drag a box around the part that counts (the glass, not the coffee). Tap Use crop to re-fingerprint.</p>
+      <div class="row crophint" hidden><button class="usecrop">Use crop</button><button class="ghost fullcrop">Whole photo</button></div>
+      <div class="thumbs" hidden><div><canvas width="32" height="32"></canvas><small>32x32 grey</small></div><div><canvas width="9" height="8"></canvas><small>9x8 dHash</small></div></div>
+      <div class="kv" hidden>
+        <b>Raw file SHA-256 (changes with every shot)</b><code data-k="raw">…</code>
+        <b>Fingerprint (pHash + dHash, 128 bit)</b><code data-k="fp">…</code>
+        <b>Atombytes hash = SHA-256(fingerprint)</b><code data-k="hash">…</code>
+      </div>
+    </div>
+    <div class="slot" id="slotB">
+      <h2>Object B</h2>
+      <div class="steps"><span data-s="1">1 Capture</span><span data-s="2">2 Crop</span><span data-s="3">3 Normalize</span><span data-s="4">4 Fingerprint</span><span data-s="5">5 Hash</span></div>
+      <label class="drop"><input type="file" id="fileB" accept="image/*"><span>Drop a second photo to compare</span></label>
+      <div class="cropbox" hidden><canvas class="src"></canvas><div class="sel"></div></div>
+      <p class="note crophint" hidden>Drag a box around the part that counts (the glass, not the coffee). Tap Use crop to re-fingerprint.</p>
+      <div class="row crophint" hidden><button class="usecrop">Use crop</button><button class="ghost fullcrop">Whole photo</button></div>
+      <div class="thumbs" hidden><div><canvas width="32" height="32"></canvas><small>32x32 grey</small></div><div><canvas width="9" height="8"></canvas><small>9x8 dHash</small></div></div>
+      <div class="kv" hidden>
+        <b>Raw file SHA-256</b><code data-k="raw">…</code>
+        <b>Fingerprint</b><code data-k="fp">…</code>
+        <b>Atombytes hash</b><code data-k="hash">…</code>
+      </div>
+    </div>
+  </section>
+
+  <section class="cmp" id="cmp" hidden>
+    <b style="font-weight:500;color:var(--mute);font-size:11px;letter-spacing:.06em;text-transform:uppercase">Hamming distance between fingerprints (0 to 128)</b>
+    <div class="big" id="dist">–</div>
+    <div class="note" id="verdict"></div>
+  </section>
+
+  <section class="ledger" id="ledger" hidden>
+    <b style="font-weight:500;color:var(--mute);font-size:11px;letter-spacing:.06em;text-transform:uppercase">Unsigned Nostr event for Object A (kind 1063 style, sign with your own key)</b>
+    <pre id="event"></pre>
+    <div class="row"><button id="copy">Copy event JSON</button><button class="ghost" id="reset">Clear</button><span class="toast" id="toast"></span></div>
+    <p class="note">The raw file hash proves "this exact photo existed". The Atombytes hash proves "an object that looks like this existed", and it survives small changes in angle and light. v0.3 will fingerprint close-up features only one object has.</p>
+  </section>
+
+  <footer>Copyright Hasky Labs, Copenhagen. All rights reserved. Made by Hasky Labs.</footer>
+</div>
+
+<script>
+const state={A:null,B:null};
+const imgs={A:null,B:null},crops={A:null,B:null};
+const light=(key,n)=>document.querySelectorAll('#slot'+key+' .steps span').forEach(s=>s.classList.toggle('on',+s.dataset.s<=n));
+
+async function sha256(bytes){const h=await crypto.subtle.digest('SHA-256',bytes);return hex(new Uint8Array(h));}
+const hex=u8=>[...u8].map(b=>b.toString(16).padStart(2,'0')).join('');
+
+// grey(): draws only the crop rectangle (sx,sy,sw,sh) of the source into w x h
+function grey(img,crop,w,h){const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.drawImage(img,crop.x,crop.y,crop.w,crop.h,0,0,w,h);const d=x.getImageData(0,0,w,h).data;const g=new Float64Array(w*h);for(let i=0;i<w*h;i++)g[i]=0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2];return g;}
+
+// pHash: 32x32 grey -> DCT -> top-left 8x8 -> compare to median -> 64 bits
+function pHash(g){const N=32,cos=[];for(let u=0;u<8;u++){cos[u]=[];for(let x=0;x<N;x++)cos[u][x]=Math.cos((2*x+1)*u*Math.PI/(2*N));}
+  const dct=[];for(let u=0;u<8;u++)for(let v=0;v<8;v++){let s=0;for(let x=0;x<N;x++)for(let y=0;y<N;y++)s+=g[y*N+x]*cos[u][x]*cos[v][y];dct.push(s);}
+  const ac=dct.slice(1).sort((a,b)=>a-b),med=ac[31];const bits=new Uint8Array(8);
+  dct.forEach((v,i)=>{if(v>med)bits[i>>3]|=128>>(i&7);});return bits;}
+// dHash: 9x8 grey -> each pixel brighter than its right neighbour -> 64 bits
+function dHash(g){const bits=new Uint8Array(8);let i=0;for(let y=0;y<8;y++)for(let x=0;x<8;x++,i++){if(g[y*9+x]>g[y*9+x+1])bits[i>>3]|=128>>(i&7);}return bits;}
+function hamming(a,b){let d=0;for(let i=0;i<a.length;i++){let x=a[i]^b[i];while(x){d+=x&1;x>>=1;}}return d;}
+
+function paint(canvas,g,w,h){const x=canvas.getContext('2d');const id=x.createImageData(w,h);for(let i=0;i<w*h;i++){id.data[i*4]=id.data[i*4+1]=id.data[i*4+2]=g[i];id.data[i*4+3]=255;}x.putImageData(id,0,0);canvas.style.width=(w*4)+'px';canvas.style.height=(h*4)+'px';}
+
+// Stage 1: capture. Load the file, draw it into the crop canvas, default crop = whole photo.
+async function capture(key,file){
+  const slot=document.getElementById('slot'+key);
+  light(key,1);
+  const url=URL.createObjectURL(file);const img=new Image();await new Promise((r,j)=>{img.onload=r;img.onerror=j;img.src=url;});
+  imgs[key]={img,raw:await sha256(await file.arrayBuffer()),name:file.name,size:file.size,type:file.type};
+  slot.querySelector('.drop').hidden=true;
+  const box=slot.querySelector('.cropbox'),cv=box.querySelector('canvas.src');
+  const scale=Math.min(1,900/img.naturalWidth);cv.width=Math.round(img.naturalWidth*scale);cv.height=Math.round(img.naturalHeight*scale);
+  cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+  box.hidden=false;slot.querySelectorAll('.crophint').forEach(e=>e.hidden=false);
+  crops[key]={x:0,y:0,w:img.naturalWidth,h:img.naturalHeight};drawSel(key);
+  await fingerprint(key);
+}
+
+function drawSel(key){const slot=document.getElementById('slot'+key),cv=slot.querySelector('canvas.src'),sel=slot.querySelector('.sel'),c=crops[key];
+  const k=cv.clientWidth/imgs[key].img.naturalWidth;
+  sel.style.left=c.x*k+'px';sel.style.top=c.y*k+'px';sel.style.width=c.w*k+'px';sel.style.height=c.h*k+'px';}
+
+// Stages 2-5: crop, normalize, fingerprint, hash.
+async function fingerprint(key){
+  const slot=document.getElementById('slot'+key),thumbs=slot.querySelector('.thumbs'),kv=slot.querySelector('.kv');
+  const {img,raw,name,size,type}=imgs[key],crop=crops[key];
+  light(key,2);
+  const g32=grey(img,crop,32,32),g9=grey(img,crop,9,8);
+  light(key,3);
+  const [c1,c2]=thumbs.querySelectorAll('canvas');paint(c1,g32,32,32);paint(c2,g9,9,8);thumbs.hidden=false;
+  const fp=new Uint8Array(16);fp.set(pHash(g32),0);fp.set(dHash(g9),8);
+  light(key,4);
+  const hash=await sha256(fp);
+  light(key,5);
+  kv.querySelector('[data-k=raw]').textContent=raw;
+  kv.querySelector('[data-k=fp]').textContent=hex(fp);
+  kv.querySelector('[data-k=hash]').textContent=hash;kv.hidden=false;
+  state[key]={raw,fp,hash,name,size,type,crop};
+  compare();ledger();
+}
+
+// Drag-to-select on the crop canvas (mouse and touch via pointer events)
+function wireCrop(key){const slot=document.getElementById('slot'+key),box=slot.querySelector('.cropbox'),cv=box.querySelector('canvas.src');let s=null;
+  const pt=e=>{const r=cv.getBoundingClientRect();const k=imgs[key].img.naturalWidth/r.width;return{x:(e.clientX-r.left)*k,y:(e.clientY-r.top)*k};};
+  cv.addEventListener('pointerdown',e=>{if(!imgs[key])return;s=pt(e);cv.setPointerCapture(e.pointerId);});
+  cv.addEventListener('pointermove',e=>{if(!s)return;const p=pt(e);const W=imgs[key].img.naturalWidth,H=imgs[key].img.naturalHeight;
+    const x=Math.max(0,Math.min(s.x,p.x)),y=Math.max(0,Math.min(s.y,p.y));
+    crops[key]={x,y,w:Math.min(W,Math.max(s.x,p.x))-x,h:Math.min(H,Math.max(s.y,p.y))-y};drawSel(key);});
+  cv.addEventListener('pointerup',()=>{s=null;if(crops[key].w<8||crops[key].h<8)crops[key]={x:0,y:0,w:imgs[key].img.naturalWidth,h:imgs[key].img.naturalHeight};drawSel(key);});
+  slot.querySelector('.usecrop').addEventListener('click',()=>fingerprint(key));
+  slot.querySelector('.fullcrop').addEventListener('click',()=>{crops[key]={x:0,y:0,w:imgs[key].img.naturalWidth,h:imgs[key].img.naturalHeight};drawSel(key);fingerprint(key);});
+}
+
+function compare(){const c=document.getElementById('cmp');if(!state.A||!state.B){c.hidden=true;return;}
+  const d=hamming(state.A.fp,state.B.fp);const el=document.getElementById('dist');el.textContent=d;
+  const same=d<=16;el.className='big '+(same?'ok':'bad');
+  document.getElementById('verdict').textContent=same?'Under 16 bits apart: very likely the same object or the same photo. Same raw SHA-256 would mean the identical file.':'More than 16 bits apart: different objects, or the same object photographed too differently. A better adapter closes this gap.';c.hidden=false;}
+
+function ledger(){if(!state.A)return;const a=state.A;const ev={kind:1063,created_at:Math.floor(Date.now()/1000),content:'Atombytes v0.2 fingerprint of a physical object',
+  tags:[['x',a.hash],['fingerprint',hex(a.fp)],['file-sha256',a.raw],['m',a.type||'image/jpeg'],['size',String(a.size)],['adapter','photo+crop/phash+dhash/v0.2'],['crop',[a.crop.x,a.crop.y,a.crop.w,a.crop.h].map(Math.round).join(',')],['t','atombytes'],['t','nostr']]};
+  document.getElementById('event').textContent=JSON.stringify(ev,null,2);document.getElementById('ledger').hidden=false;}
+
+for(const key of ['A','B']){const inp=document.getElementById('file'+key),drop=inp.closest('.drop');
+  inp.addEventListener('change',e=>e.target.files[0]&&capture(key,e.target.files[0]));wireCrop(key);
+  drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over');});
+  drop.addEventListener('dragleave',()=>drop.classList.remove('over'));
+  drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');const f=e.dataTransfer.files[0];f&&capture(key,f);});}
+document.getElementById('copy').addEventListener('click',async()=>{const t=document.getElementById('event').textContent;const toast=document.getElementById('toast');
+  try{await navigator.clipboard.writeText(t);toast.textContent='Copied';}catch{const r=document.createRange();r.selectNodeContents(document.getElementById('event'));getSelection().removeAllRanges();getSelection().addRange(r);toast.textContent='Selected, press copy';}
+  setTimeout(()=>toast.textContent='',2000);});
+document.getElementById('reset').addEventListener('click',()=>location.reload());
+</script>
